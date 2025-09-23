@@ -1,3 +1,9 @@
+//maximum precision and responsiveness, the next step is to use hardware timers on the Arduino.
+//usually called:
+//Timer/Counter with Output Compare
+//Or simply hardware-timed pulse generation
+
+
 // ---------- Pins ----------
 const uint8_t BTN1_PIN = 2;    // Button 1: triggers 3 device pulses
 const uint8_t BTN2_PIN = 3;    // Button 2: LED flash + 1 device pulse
