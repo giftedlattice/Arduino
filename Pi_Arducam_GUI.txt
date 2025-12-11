@@ -1,0 +1,151 @@
+sudo apt update
+sudo apt install -y zenity
+
+---
+
+mkdir -p ~/bin
+nano ~/bin/pi-cam-menu.sh
+
+
+---
+
+#!/usr/bin/env bash
+set -euo pipefail
+
+TITLE="Pi Camera Quick Menu"
+
+# Bookworm names first; fall back to older libcamera-* names if present.
+HELLO=$(command -v rpicam-hello || command -v libcamera-hello || true)
+VID=$(command -v rpicam-vid || command -v libcamera-vid || true)
+STILL=$(command -v rpicam-still || command -v libcamera-still || true)
+
+if ! command -v zenity >/dev/null 2>&1; then
+  echo "Zenity not installed. Run: sudo apt install zenity"
+  exit 1
+fi
+
+if [[ -z "$HELLO" ]]; then
+  zenity --error --title "$TITLE" --text "Couldn't find rpicam-hello/libcamera-hello. Install rpicam-apps."
+  exit 1
+fi
+
+run_term() {
+  local cmd="$1"
+  if command -v x-terminal-emulator >/dev/null 2>&1; then
+    x-terminal-emulator -e bash -lc "$cmd"
+  elif command -v lxterminal >/dev/null 2>&1; then
+    lxterminal -e bash -lc "$cmd"
+  elif command -v gnome-terminal >/dev/null 2>&1; then
+    gnome-terminal -- bash -lc "$cmd"
+  elif command -v xterm >/dev/null 2>&1; then
+    xterm -e bash -lc "$cmd"
+  else
+    bash -lc "$cmd"
+  fi
+}
+
+show_text() {
+  local t="$1"; local text="$2"
+  local tmp; tmp=$(mktemp)
+  printf '%s\n' "$text" > "$tmp"
+  zenity --text-info --title="$t" --width=800 --height=500 --filename="$tmp"
+  rm -f "$tmp"
+}
+
+ts() { date +"%Y%m%d_%H%M%S"; }
+mkdir -p "$HOME/Pictures" "$HOME/Videos" >/dev/null 2>&1 || true
+
+while true; do
+  choice=$(zenity --list --title="$TITLE" --width=720 --height=420 \
+    --column="Action" --column="What it does" \
+    "Preview 30s (flipped)" "quick live view (auto closes)" \
+    "Preview until stopped (flipped)" "opens a terminal; Ctrl+C to stop" \
+    "Preview 720p 30s" "forces 1280x720" \
+    "List detected cameras" "shows cameras and modes" \
+    "Take photo" "save JPEG into Pictures/" \
+    "Record 5s clip" "save MP4 into Videos/" \
+    "UDP stream (VLC-friendly mpegts)" "stream until stopped; needs client IP/port" \
+    "Custom rpicam-hello flags..." "type your own flags" \
+    "Quit" "" \
+    --print-column=1) || exit 0
+
+  case "$choice" in
+    "Preview 30s (flipped)")
+      "$HELLO" --timeout 30000 --hflip --vflip || zenity --error --title "$TITLE" --text "Preview failed."
+      ;;
+    "Preview until stopped (flipped)")
+      run_term "$HELLO --timeout 0 --hflip --vflip; echo; read -rp 'Press Enter to close...' _"
+      ;;
+    "Preview 720p 30s")
+      "$HELLO" --timeout 30000 --width 1280 --height 720 || zenity --error --title "$TITLE" --text "Preview failed."
+      ;;
+    "List detected cameras")
+      out=$("$HELLO" --list-cameras 2>&1 || true)
+      show_text "Detected cameras" "$out"
+      ;;
+    "Take photo")
+      [[ -n "$STILL" ]] || { zenity --error --title "$TITLE" --text "No rpicam-still/libcamera-still found."; continue; }
+      file="$HOME/Pictures/cam_$(ts).jpg"
+      if out=$("$STILL" -o "$file" 2>&1); then
+        zenity --info --title="$TITLE" --text="Saved:\n$file"
+      else
+        show_text "Photo failed" "$out"
+      fi
+      ;;
+    "Record 5s clip")
+      [[ -n "$VID" ]] || { zenity --error --title "$TITLE" --text "No rpicam-vid/libcamera-vid found."; continue; }
+      file="$HOME/Videos/clip_$(ts).mp4"
+      if out=$("$VID" -t 5000 -o "$file" 2>&1); then
+        zenity --info --title="$TITLE" --text="Saved:\n$file"
+      else
+        show_text "Video failed" "$out"
+      fi
+      ;;
+    "UDP stream (VLC-friendly mpegts)")
+      [[ -n "$VID" ]] || { zenity --error --title "$TITLE" --text "No rpicam-vid/libcamera-vid found."; continue; }
+      ip=$(zenity --entry --title="$TITLE" --text="Client IP address:" --entry-text="192.168.1.50") || continue
+      port=$(zenity --entry --title="$TITLE" --text="UDP port:" --entry-text="5000") || continue
+      zenity --info --title="$TITLE" --text="On the client, run:\n\nvlc udp://@:${port}\n\nStreaming starts in a terminal. Ctrl+C to stop."
+      run_term "$VID -t 0 -n --codec libav --libav-format mpegts -o udp://${ip}:${port}; echo; read -rp 'Press Enter to close...' _"
+      ;;
+    "Custom rpicam-hello flags...")
+      flags=$(zenity --entry --title="$TITLE" --text="Flags for rpicam-hello (example: --timeout 0 --hflip --vflip)" --entry-text="--timeout 0") || continue
+      run_term "$HELLO $flags; echo; read -rp 'Press Enter to close...' _"
+      ;;
+    *)
+      exit 0
+      ;;
+  esac
+done
+
+
+---
+
+
+chmod +x ~/bin/pi-cam-menu.sh
+
+
+
+
+----
+
+nano ~/Desktop/PiCameraMenu.desktop
+
+---
+
+[Desktop Entry]
+Type=Application
+Name=Pi Camera Menu
+Comment=Quick rpicam tests
+Exec=sh -c "$HOME/bin/pi-cam-menu.sh"
+Icon=camera-video
+Terminal=false
+Categories=Utility;
+
+
+---
+
+chmod +x ~/Desktop/PiCameraMenu.desktop
+
+
+
