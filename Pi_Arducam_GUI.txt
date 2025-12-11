@@ -147,5 +147,65 @@ Categories=Utility;
 
 chmod +x ~/Desktop/PiCameraMenu.desktop
 
+_____________________________---
 
+
+nano ~/bin/pi-cam-menu.sh
+
+---
+
+In the big zenity --list menu near the bottom, change the line:
+"Custom rpicam-hello flags..." "type your own flags" \
+
+to something like:
+"Build custom preview (help + wizard)" "see options, build and run rpicam-hello" \
+
+---
+
+Now scroll further down to the case "$choice" in block and find this bit (the old custom entry):
+
+
+    "Custom rpicam-hello flags...")
+      flags=$(zenity --entry --title="$TITLE" --text="Flags for rpicam-hello (example: --timeout 0 --hflip --vflip)" --entry-text="--timeout 0") || continue
+      run_term "$HELLO $flags; echo; read -rp 'Press Enter to close...' _"
+      ;;
+
+Delete that whole block and replace it with this “help + builder” block:
+
+    "Build custom preview (help + wizard)")
+      # 1) Short cheat sheet (summary of common options)
+      help_text=$'rpicam-hello command builder\n\nCOMMON FLAGS (summary)\n\n  --timeout <ms>\n      How long to run preview, in milliseconds.\n      Use 0 to keep running until you press Ctrl+C.\n\n  --width <pixels>, --height <pixels>\n      Set preview resolution (e.g. 1280x720).\n\n  --framerate <fps>\n      Target preview framerate, e.g. 30.\n\n  --hflip / --vflip\n      Flip the image horizontally or vertically.\n\n  --rotation <0|180>\n      Rotate the image (0 or 180 degrees).\n\n  --brightness, --contrast, --saturation, --sharpness\n      Adjust image look. Typically in range shown in --help.\n\n  --shutter <µs>, --gain <value>\n      Manual exposure and gain.\n\nThis is just a summary; the next screen shows the full help\nfrom rpicam-hello --help with ALL available parameters.'
+      show_text "rpicam-hello options (summary)" "$help_text"
+
+      # 2) Full help: all commands & parameters from your installed version
+      full=$("$HELLO" --help 2>&1 || true)
+      show_text "Full rpicam-hello --help" "$full"
+
+      # 3) Form to build a command
+      form=$(zenity --forms \
+        --title="$TITLE - Build rpicam-hello command" \
+        --text="Fill the fields you care about. Leave a field blank to skip it.\nYou can add any extra flags on the last line." \
+        --add-entry="Timeout (ms, e.g. 30000 or 0 for infinite)" \
+        --add-entry="Width (pixels, e.g. 1280)" \
+        --add-entry="Height (pixels, e.g. 720)" \
+        --add-entry="Framerate (fps, e.g. 30)" \
+        --add-entry="Extra flags (e.g. --hflip --vflip --brightness 0.2)" \
+        --separator="|") || continue
+
+      IFS="|" read -r timeout width height fps extra <<< "$form"
+
+      # 4) Assemble the command from pieces
+      cmd="$HELLO"
+      [[ -n "$timeout" ]] && cmd+=" --timeout $timeout"
+      [[ -n "$width"   ]] && cmd+=" --width $width"
+      [[ -n "$height"  ]] && cmd+=" --height $height"
+      [[ -n "$fps"     ]] && cmd+=" --framerate $fps"
+      [[ -n "$extra"   ]] && cmd+=" $extra"
+
+      # 5) Confirm + show final command
+      zenity --question --title="$TITLE" \
+        --text="About to run:\n\n$cmd\n\nRun this now?" || continue
+
+      run_term "$cmd; echo; read -rp \"Press Enter to close...\" _"
+      ;;
 
