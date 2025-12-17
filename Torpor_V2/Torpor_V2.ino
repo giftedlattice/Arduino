@@ -8,7 +8,7 @@ DHT dht(DHT_PIN, DHTTYPE);
 
 int lastPirState = LOW;
 unsigned long lastDhtReadMs = 0;
-const unsigned long DHT_MIN_INTERVAL_MS = 2000;  // 2 s
+const unsigned long DHT_MIN_INTERVAL_MS = 500;  // 
 
 void setup() {
   Serial.begin(115200); // faster, more robust
